@@ -52,7 +52,7 @@ def main():
             steps_per_epoch=batch_size,
             epochs=2,
             validation_data=(X_val, y_val))    
-        
+        del X_train, X_val, y_train, y_val
         pick = random.sample(range(8),8)
         for i, m in enumerate(pick):
             print('learning with noisy data No.{}'.format(i))
@@ -67,6 +67,7 @@ def main():
                 steps_per_epoch=batch_size,
                 epochs=2,
                 validation_data=(X_val, y_val))
+            del X_train, X_val, y_train, y_val
 
     model.save(OUTPUT+'20190512model.h5', include_optimizer=False)
 
