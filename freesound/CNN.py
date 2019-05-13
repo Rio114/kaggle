@@ -81,11 +81,10 @@ def main():
                 epochs=2,
                 validation_data=(X_val, y_val))
             del X_train, y_train
-            gc.collect()         
+            gc.collect()
+            model.save(OUTPUT+'20190512_CNN_model.h5', include_optimizer=False)
         del X_val, y_val
         gc.collect()
-    model.save(OUTPUT+'20190512_CNN_model.h5', include_optimizer=False)
 
 if __name__ == '__main__':
     main()
-
