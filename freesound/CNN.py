@@ -4,7 +4,7 @@ import random
 from keras.preprocessing.image import ImageDataGenerator
 import gc
 
-from CNN_LSTM_model import CNN_LSTM_Model
+from CNN_model import CNN_Model
 
 def main():
     FOLDER = "../../data_kaggle/freesound/"
@@ -14,7 +14,7 @@ def main():
     num_freq = 128
     len_div = 256
 
-    model = CNN_LSTM_Model()
+    model = CNN_Model()
 
     datagen = ImageDataGenerator(
             rotation_range=0,
@@ -84,7 +84,7 @@ def main():
             gc.collect()         
         del X_val, y_val
         gc.collect()
-    model.save(OUTPUT+'20190512_CNN_LSTM_model.h5', include_optimizer=False)
+    model.save(OUTPUT+'20190512_CNN_model.h5', include_optimizer=False)
 
 if __name__ == '__main__':
     main()
