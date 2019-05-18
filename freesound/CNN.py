@@ -4,7 +4,8 @@ import random
 from keras.preprocessing.image import ImageDataGenerator
 import gc
 
-from CNN_model2 import CNN_Model
+from CNN_model import CNN_Model
+from keras import models
 
 def main():
     FOLDER = "../../data_kaggle/freesound/"
@@ -33,7 +34,7 @@ def main():
     X_val[:, :, :, np.newaxis]
     X_val = X_val.reshape(-1, num_freq,len_div, 1)
     
-    epochs = 10
+    epochs = 30
     for n in range(epochs):
         print('epoch No.{}'.format(n))
         pick = random.sample(range(6),6)
@@ -49,7 +50,7 @@ def main():
                 validation_data=(X_val, y_val))
             del X_train, y_train
             gc.collect()
-        model.save(OUTPUT+'20190516_CNN_model.h5', include_optimizer=False)
+        model.save(OUTPUT+'20190518_CNN_model.h5', include_optimizer=False)
         
 if __name__ == '__main__':
     main()
