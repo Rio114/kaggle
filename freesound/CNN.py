@@ -4,7 +4,7 @@ import random
 from keras.preprocessing.image import ImageDataGenerator
 import gc
 
-from CNN_model import CNN_Model
+from LSTM_model import LSTM_Model
 from keras import models
 
 def main():
@@ -15,7 +15,7 @@ def main():
     num_freq = 128
     len_div = 256
 
-    model = CNN_Model()
+    model = LSTM_Model()
 
     datagen = ImageDataGenerator(
             rotation_range=0,
