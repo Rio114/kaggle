@@ -50,7 +50,7 @@ def main():
                 validation_data=(X_val, y_val))
             del X_train, y_train
             gc.collect()
-        model.save(OUTPUT+'20190518_CNN_model.h5', include_optimizer=False)
+        model.save(OUTPUT+'20190520_LSTM_model.h5', include_optimizer=False)
         
 if __name__ == '__main__':
     main()

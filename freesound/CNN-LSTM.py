@@ -59,7 +59,7 @@ def main():
         gc.collect()
 
         model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size,),
-            steps_per_epoch=int(len(y_train)/batch_size),
+            steps_per_epoch=len(y_train)//batch_size,
             epochs=2,
             validation_data=(X_val, y_val))
         del X_train, X_val, y_train, y_val
@@ -77,7 +77,7 @@ def main():
                 X_train = pickle.load(f)
                 y_train = pickle.load(f)
             model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size,),
-                steps_per_epoch=int(len(y_train)/batch_size),
+                steps_per_epoch=len(y_train)//batch_size,
                 epochs=2,
                 validation_data=(X_val, y_val))
             del X_train, y_train
