@@ -4,7 +4,7 @@ import random
 from keras.preprocessing.image import ImageDataGenerator
 import gc
 
-from LSTM_model import LSTM_Model
+from Bidir_LSTM_model import LSTM_attention
 from keras import models
 
 def main():
@@ -15,7 +15,8 @@ def main():
     num_freq = 128
     len_div = 256
 
-    model = LSTM_Model()
+    model_obj = LSTM_attention()
+    model = model_obj.LSTM()
 
     datagen = ImageDataGenerator(
             rotation_range=0,
@@ -26,31 +27,24 @@ def main():
             horizontal_flip=False,
             vertical_flip=False)
 
-    batch_size = 32
-
-    with open(PREPROCESS+'val_arr_0.pickle', 'rb') as f:
+    with open(PREPROCESS+'val_curated_0.pickle', 'rb') as f:
         X_val = pickle.load(f)
         y_val = pickle.load(f)
-    X_val[:, :, :, np.newaxis]
-    X_val = X_val.reshape(-1, num_freq,len_div, 1)
-    
+    X_val = X_val.reshape(-1, len_div, num_freq, 1)
+
     epochs = 30
-    for n in range(epochs):
-        print('epoch No.{}'.format(n))
-        pick = random.sample(range(6),6)
-        for i, m in enumerate(pick):
-            print('learning data No.{}'.format(i))
-            with open(PREPROCESS+'train_arr_{}.pickle'.format(m), 'rb') as f:
-                X_train = pickle.load(f)
-                y_train = pickle.load(f)
-            X_train = X_train.reshape(-1, num_freq,len_div, 1)
-            model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size,),
-                steps_per_epoch=int(len(y_train)/batch_size),
-                epochs=2,
-                validation_data=(X_val, y_val))
-            del X_train, y_train
-            gc.collect()
-        model.save(OUTPUT+'20190520_LSTM_model.h5', include_optimizer=False)
+    batch_size = 32
+    with open(PREPROCESS+'train_curated_0.pickle', 'rb') as f:
+        X_train = pickle.load(f)
+        y_train = pickle.load(f)
+    X_train = X_train.reshape(-1, len_div, num_freq, 1)
+
+    for _ in range(epochs):
+        model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size,),
+            steps_per_epoch=len(y_train)//batch_size,
+            epochs=5,
+            validation_data=(X_val, y_val))
+        model.save(OUTPUT+'20190522_BiLSTM_model.h5', include_optimizer=False)
         
 if __name__ == '__main__':
     main()
