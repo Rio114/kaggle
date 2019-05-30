@@ -13,10 +13,11 @@ from lwlrap import tf_lwlrap
 import numpy as np
 
 class LSTM_attention():
-    def __init__(self, num_freq = 128, len_div = 256, num_hidden=100):
+    def __init__(self, num_freq = 128, len_div = 256, num_hidden=300, num_class=80):
         self.num_freq = num_freq
         self.len_div = len_div
         self.num_hidden = num_hidden
+        self.num_classs = num_class
         
     def LSTM(self):
 
@@ -28,10 +29,10 @@ class LSTM_attention():
         self.conc = Concatenate(axis=-1, name='concat')([self.lstm_for, self.lstm_inv])
         self.dens = Dense(self.num_freq, name='dense_for_inv')(self.conc)        
         self.drop = Dropout(rate=0.05, name='drop')(self.dens)
-        self.dens1 = Dense(80, name='dense1')(self.drop)
+        self.dens1 = Dense(self.num_classs*2, name='dense1')(self.drop)
         self.norm = BatchNormalization(axis=-1, name='norm')(self.dens1)
         self.flat = Flatten(name='flatten')(self.norm)
-        self.dens2 = Dense(80, name='dense2')(self.flat)
+        self.dens2 = Dense(self.num_classs, name='dense2')(self.flat)
         self.pred = Activation('softmax',name='pred')(self.dens2)
 
         adam = optimizers.Adam(lr=0.0001)

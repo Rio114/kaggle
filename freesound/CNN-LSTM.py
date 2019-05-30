@@ -4,7 +4,7 @@ import random
 from keras.preprocessing.image import ImageDataGenerator
 import gc
 
-from CNN_LSTM_model import CNN_LSTM_Model
+from BiLSTM_model import LSTM_attention
 
 def main():
     FOLDER = "../../data_kaggle/freesound/"
@@ -14,7 +14,8 @@ def main():
     num_freq = 128
     len_div = 256
 
-    model = CNN_LSTM_Model()
+    model_obj = LSTM_attention()
+    model = model_obj.LSTM()
 
     datagen = ImageDataGenerator(
             rotation_range=0,
