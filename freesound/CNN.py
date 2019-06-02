@@ -50,7 +50,7 @@ def main():
         X_train = X_train.reshape(-1, len_div, num_freq, 1)
         model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size,),
             steps_per_epoch=len(y_train)//batch_size,
-            epochs=2,
+            epochs=3,
             validation_data=(X_val, y_val))
         del X_train, y_train
         gc.collect()
@@ -63,7 +63,7 @@ def main():
             X_train = X_train.reshape(-1, len_div, num_freq, 1)
             model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size,),
                 steps_per_epoch=len(y_train)//batch_size,
-                epochs=2,
+                epochs=3,
                 validation_data=(X_val, y_val))
             del X_train, y_train
             gc.collect()
