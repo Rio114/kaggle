@@ -1,29 +1,16 @@
 import numpy as np
-from random import shuffle
-from keras.applications.imagenet_utils import preprocess_input
-from keras.preprocessing import image
-import librosa
+import pickle
 
 class Generator(object):
-    def __init__(self, batch_size, df, train_keys, val_keys, target_names, img_size):
+    def __init__(self, batch_size, prefix, train_keys, val_keys, img_size):
         self.batch_size = batch_size
-        self.df = df
+        self.prefix = prefix
         self.train_keys = train_keys
         self.val_keys = val_keys
-        self.target_names = target_names
         self.image_size = img_size  # (len_div, num_freq)
-
-    def file2np(self, fname):
-        n_mels=self.image_size[1]
-        y, sr = librosa.load(fname)
-        S = librosa.feature.melspectrogram(y, sr=sr, n_mels=n_mels)
-        log_S = librosa.power_to_db(S, ref=np.max) # [-80, 0.0]
-        X = (log_S + 80) / 80 # [0.0, 1.0]
-        return X
 
     def generate(self, train=True):
         img_size = self.image_size
-        df = self.df
         while True:
             if train:
                 keys = self.train_keys
@@ -32,9 +19,9 @@ class Generator(object):
             inputs = []
             targets = []
             for i, key in enumerate(keys):
-                img_path = df.query('fname == "{}"'.format(key))['path'].values[0]
-                target = df.query('fname == "{}"'.format(key))[self.target_names].values[0]
-                img = self.file2np(img_path)
+                with open(self.prefix+'{}.pickle'.format(key[0]), 'rb') as f:
+                            img = pickle.load(f)
+                            target = pickle.load(f)
                 
                 div = img_size[0] # img_size(len_div, num_freq)
                 num_batch = img.shape[1] // div
