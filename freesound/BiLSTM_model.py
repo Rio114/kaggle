@@ -24,15 +24,14 @@ class LSTM_attention():
         self.inputs = Input(shape=(self.len_div, self.num_freq, 1), name='input')
         self.resh = Reshape([self.len_div, self.num_freq])(self.inputs)
         
-        self.lstm_for = LSTM(self.num_hidden, return_sequences=True, go_backwards=False, name='LSTM_for')(self.resh)
-        self.lstm_inv = LSTM(self.num_hidden, return_sequences=True, go_backwards=True, name='LSTM_inv')(self.resh)
+        self.lstm_for = LSTM(self.num_hidden, return_sequences=False, go_backwards=False, name='LSTM_for')(self.resh)
+        self.lstm_inv = LSTM(self.num_hidden, return_sequences=False, go_backwards=True, name='LSTM_inv')(self.resh)
         self.conc = Concatenate(axis=-1, name='concat')([self.lstm_for, self.lstm_inv])
         self.dens = Dense(self.num_freq, name='dense_for_inv')(self.conc)        
         self.drop = Dropout(rate=0.05, name='drop')(self.dens)
         self.dens1 = Dense(self.num_classs*2, name='dense1')(self.drop)
         self.norm = BatchNormalization(axis=-1, name='norm')(self.dens1)
-        self.flat = Flatten(name='flatten')(self.norm)
-        self.dens2 = Dense(self.num_classs, name='dense2')(self.flat)
+        self.dens2 = Dense(self.num_classs, name='dense2')(self.norm)
         self.pred = Activation('softmax',name='pred')(self.dens2)
 
         adam = optimizers.Adam(lr=0.0001)
