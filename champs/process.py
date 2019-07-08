@@ -172,8 +172,9 @@ def get_cos(df_structures_idx, mol, thres=1.7):
     return out
 
 def get_pickup(df_idx, df_structures_idx, molecule, num_pickup=5, atoms=['H', 'C', 'N', 'O', 'F']):
-    num_feature = 5 #direction, angle, orientation, bond_cos1, bond_cos2
-    pickup_dist_matrix = np.zeros([0, len(atoms)*num_pickup*num_feature])
+    num_feature = 5 #direction, angle, orientation, bond_cos1, bond_cos2, cos_itself*2
+
+    pickup_dist_matrix = np.zeros([0, len(atoms)*num_pickup*num_feature + 2])
     assigned_idxs = assign_atoms_index(df_idx, molecule) # [0, 1, 2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6]
     dist_mat = get_dist_matrix(df_structures_idx, molecule)
     bond_cos = get_cos(df_structures_idx, molecule)
@@ -221,7 +222,7 @@ def get_pickup(df_idx, df_structures_idx, molecule, num_pickup=5, atoms=['H', 'C
                 target_matrix[a, num_pickup:num_pickup*2] = pickup_angles[:num_pickup]
                 target_matrix[a, num_pickup*2:num_pickup*3] = pickup_orientations[:num_pickup]
                 target_matrix[a, num_pickup*3:num_pickup*4] = pickup_bond_cos[:num_pickup, 0]
-                target_matrix[a, num_pickup*4:] = pickup_bond_cos[:num_pickup, 1]
+                target_matrix[a, num_pickup*4:num_pickup*5] = pickup_bond_cos[:num_pickup, 1]
             else:
                 target_matrix[a, :num_atom] = pickup_dist
                 target_matrix[a, num_pickup:num_pickup+num_atom] = pickup_angles
@@ -231,14 +232,67 @@ def get_pickup(df_idx, df_structures_idx, molecule, num_pickup=5, atoms=['H', 'C
                 target_matrix[a, num_pickup*3:num_pickup*3+num_atom] = pickup_bond_cos[:,0]
                 target_matrix[a, num_pickup*3+num_atom:num_pickup*4] = 1
                 target_matrix[a, num_pickup*4:num_pickup*4+num_atom] = pickup_bond_cos[:,1]
-                target_matrix[a, num_pickup*4+num_atom:] = 1
+                target_matrix[a, num_pickup*4+num_atom:-2] = 1
 
+        dist_ang_ori_bond =  target_matrix.reshape(-1)
+        dist_ang_ori_bond_bond = np.hstack([dist_ang_ori_bond,  bond_cos[idx,0],  bond_cos[idx,1]])
+        pickup_dist_matrix = np.vstack([pickup_dist_matrix, dist_ang_ori_bond_bond])
 
-        pickup_dist_matrix = np.vstack([pickup_dist_matrix, target_matrix.reshape(-1)])
-    return pickup_dist_matrix #(num_atoms, num_pickup*5)
+    return pickup_dist_matrix #(num_assigned_atoms, num_atoms*num_pickup*5 + 2)
 
 def merge_atom(df, df_distance):
     df_merge_0 = pd.merge(df, df_distance, left_on=['molecule_name', 'atom_index_0'], right_on=['molecule_name', 'atom_index'])
     df_merge_0_1 = pd.merge(df_merge_0, df_distance, left_on=['molecule_name', 'atom_index_1'], right_on=['molecule_name', 'atom_index'])
     del df_merge_0_1['atom_index_x'], df_merge_0_1['atom_index_y']
     return df_merge_0_1
+
+def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
+    pairs_list = []
+    df_tr = df_idx.loc[molecule_name]
+    df_st = df_structures_idx.loc[molecule_name]
+    if type(df_tr) == pd.Series:
+        return []
+    
+    pairs_3J = df_tr.query('type == "{}"'.format(type_3J))[['atom_index_0','atom_index_1','id']].values
+    dist_matrix = get_dist_matrix(df_structures_idx, molecule_name)
+
+    for p3 in pairs_3J:
+        atom_idx_0 = p3[0]
+        con_id = p3[2]
+
+        dist_arr = dist_matrix[atom_idx_0]
+        mask = dist_arr != 0
+        dist_arr_excl_0 = dist_arr[mask]
+        masked_idx = df_st['atom_index'].values[mask]
+        atom_idx_1 = masked_idx[np.argsort(dist_arr_excl_0)[0]]
+
+        atom_idx_3 = p3[1]
+        dist_arr = dist_matrix[atom_idx_3]
+        mask = dist_arr != 0
+        dist_arr_excl_0 = dist_arr[mask]
+        masked_idx = df_st['atom_index'].values[mask]
+        atom_idx_2 = masked_idx[np.argsort(dist_arr_excl_0)[0]]        
+        
+        pair = [atom_idx_0, atom_idx_1, atom_idx_2, atom_idx_3, con_id]
+        pairs_list.append(pair)
+        
+    return pairs_list
+
+def get_cos_3J(df_structures_idx, molecule_name, atom_idx_list):
+    pos_list = []
+    df_st = df_structures_idx.loc[molecule_name]
+
+    for idx in atom_idx_list:
+        pos = df_st.query('atom_index == {}'.format(idx))[['x', 'y', 'z']].values
+        pos_list.append(pos)
+
+    v01 = pos_list[1] - pos_list[0]
+    v12 = pos_list[2] - pos_list[1]
+    v23 = pos_list[3] - pos_list[2]
+
+    v01_12 = v01 - ((np.dot(v01, v12.T) / np.linalg.norm(v12) **2 ) * v12)[0]
+    v23_12 = v23 - ((np.dot(v23, v12.T) / np.linalg.norm(v12) **2 ) * v12)[0]
+    
+    cos = (np.dot(v01_12, v23_12.T) / np.linalg.norm(v01_12) / np.linalg.norm(v23_12))[0]
+    
+    return np.array([cos, cos**2-1])[:,0]
