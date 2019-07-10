@@ -246,14 +246,96 @@ def merge_atom(df, df_distance):
     del df_merge_0_1['atom_index_x'], df_merge_0_1['atom_index_y']
     return df_merge_0_1
 
-def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
+def get_cos_3J(df_structures_idx, molecule_name, atom_idx_list):
+    pos_list = []
+    df_st = df_structures_idx.loc[molecule_name]
+
+    for idx in atom_idx_list:
+        pos = df_st.query('atom_index == {}'.format(idx))[['x', 'y', 'z']].values
+        pos_list.append(pos)
+
+    v01 = pos_list[1] - pos_list[0]
+    v12 = pos_list[2] - pos_list[1]
+    v23 = pos_list[3] - pos_list[2]
+
+    v01_12 = v01 - ((np.dot(v01, v12.T) / np.linalg.norm(v12) **2 ) * v12)[0]
+    v23_12 = v23 - ((np.dot(v23, v12.T) / np.linalg.norm(v12) **2 ) * v12)[0]
+
+    if np.linalg.norm(v23_12)*np.linalg.norm(v01_12) == 0:
+        return np.array([1, 1, np.linalg.norm(v12)])
+    
+    cos = (np.dot(v01_12, v23_12.T) / np.linalg.norm(v01_12) / np.linalg.norm(v23_12))[0]
+    
+    return np.array([cos[0], cos[0]**2-1, np.linalg.norm(v12)])
+
+def gen_3JHC_list(df_idx, df_structures_idx, molecule_name):
+    pairs_list = []
+    df_tr = df_idx.loc[molecule_name]
+    df_st = df_structures_idx.loc[molecule_name]
+
+    if type(df_tr) == pd.Series:
+        return []
+
+    pairs_3J = df_tr.query('type == "{}"'.format('3JHC'))[['atom_index_0','atom_index_1','id']].values
+    dist_matrix = get_dist_matrix(df_structures_idx, molecule_name)
+
+    for p3 in pairs_3J:
+        atom_idx_0 = p3[0] 
+        con_id = p3[2] 
+
+        dist_arr = dist_matrix[atom_idx_0] 
+        mask = dist_arr != 0
+        dist_arr_excl_0 = dist_arr[mask]
+        masked_idx = df_st['atom_index'].values[mask]
+        atom_idx_1 = masked_idx[np.argsort(dist_arr_excl_0)[0]]
+
+        atom_idx_3 = p3[1]
+        dist_arr = dist_matrix[atom_idx_3]
+        candidate_atom_idx_2 = np.arange(len(dist_arr))[(dist_arr > 1.1) * (dist_arr < 1.65)]
+        atom_idx_2 = candidate_atom_idx_2[np.argsort(dist_matrix[atom_idx_1][candidate_atom_idx_2])[0]]
+        pair = [atom_idx_0, atom_idx_1, atom_idx_2, atom_idx_3, con_id]
+        pairs_list.append(pair)
+
+    return pairs_list
+
+def gen_3JHN_list(df_idx, df_structures_idx, molecule_name):
+    pairs_list = []
+    df_tr = df_idx.loc[molecule_name]
+    df_st = df_structures_idx.loc[molecule_name]
+
+    if type(df_tr) == pd.Series:
+        return []
+
+    pairs_3J = df_tr.query('type == "{}"'.format('3JHN'))[['atom_index_0','atom_index_1','id']].values
+    dist_matrix = get_dist_matrix(df_structures_idx, molecule_name)
+
+    for p3 in pairs_3J:
+        atom_idx_0 = p3[0] 
+        con_id = p3[2] 
+
+        dist_arr = dist_matrix[atom_idx_0] 
+        mask = dist_arr != 0
+        dist_arr_excl_0 = dist_arr[mask]
+        masked_idx = df_st['atom_index'].values[mask]
+        atom_idx_1 = masked_idx[np.argsort(dist_arr_excl_0)[0]]
+
+        atom_idx_3 = p3[1]
+        dist_arr = dist_matrix[atom_idx_3]
+        candidate_atom_idx_2 = np.arange(len(dist_arr))[(dist_arr > 1.1) * (dist_arr < 1.65)]
+        atom_idx_2 = candidate_atom_idx_2[np.argsort(dist_matrix[atom_idx_1][candidate_atom_idx_2])[0]]
+        pair = [atom_idx_0, atom_idx_1, atom_idx_2, atom_idx_3, con_id]
+        pairs_list.append(pair)
+
+    return pairs_list
+
+def gen_3JHH_list(df_idx, df_structures_idx, molecule_name):
     pairs_list = []
     df_tr = df_idx.loc[molecule_name]
     df_st = df_structures_idx.loc[molecule_name]
     if type(df_tr) == pd.Series:
         return []
     
-    pairs_3J = df_tr.query('type == "{}"'.format(type_3J))[['atom_index_0','atom_index_1','id']].values
+    pairs_3J = df_tr.query('type == "{}"'.format("3JHH"))[['atom_index_0','atom_index_1','id']].values
     dist_matrix = get_dist_matrix(df_structures_idx, molecule_name)
 
     for p3 in pairs_3J:
@@ -278,21 +360,13 @@ def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
         
     return pairs_list
 
-def get_cos_3J(df_structures_idx, molecule_name, atom_idx_list):
-    pos_list = []
-    df_st = df_structures_idx.loc[molecule_name]
+def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
+    if type_3J == '3JHH':
+        return gen_3JHH_list(df_idx, df_structures_idx, molecule_name)
+    elif type_3J == '3JHC':
+        return gen_3JHC_list(df_idx, df_structures_idx, molecule_name)
+    elif type_3J == '3JHN':
+        return gen_3JHN_list(df_idx, df_structures_idx, molecule_name)
+    else:
+        return []
 
-    for idx in atom_idx_list:
-        pos = df_st.query('atom_index == {}'.format(idx))[['x', 'y', 'z']].values
-        pos_list.append(pos)
-
-    v01 = pos_list[1] - pos_list[0]
-    v12 = pos_list[2] - pos_list[1]
-    v23 = pos_list[3] - pos_list[2]
-
-    v01_12 = v01 - ((np.dot(v01, v12.T) / np.linalg.norm(v12) **2 ) * v12)[0]
-    v23_12 = v23 - ((np.dot(v23, v12.T) / np.linalg.norm(v12) **2 ) * v12)[0]
-    
-    cos = (np.dot(v01_12, v23_12.T) / np.linalg.norm(v01_12) / np.linalg.norm(v23_12))[0]
-    
-    return np.array([cos, cos**2-1])[:,0]
