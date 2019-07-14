@@ -370,3 +370,5 @@ def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
     else:
         return []
 
+def type_score(y_val, y_pred):
+    return np.log(sum(np.abs(y_val- y_pred)) / len(y_val))
