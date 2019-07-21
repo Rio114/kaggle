@@ -392,7 +392,9 @@ def gen_second_data(df_idx, df_structures_idx, m, target_bond='1JHC', target_col
     con_id = df_mol.query('type == "{}"'.format(target_bond))['id'].values
     df_mol_idx = df_mol.set_index('id')
 
-    features = np.zeros([len(con_id), 26]) # pred: 1x2, 2JHH: 3x2, 2JHC: 3x2, 3JHH: 3x2, 3JHC: 3x2  
+    bonds = ['1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
+
+    features = np.zeros([len(con_id), len(bonds)+2]) # pred: 1x2, 2JHH: 3x2, 2JHC: 3x2, 3JHH: 3x2, 3JHC: 3x2  
 
     for i, idx in enumerate(con_id):
         focus_0 = df_mol_idx.loc[idx]['atom_index_0']
@@ -404,29 +406,14 @@ def gen_second_data(df_idx, df_structures_idx, m, target_bond='1JHC', target_col
 
         df_mol_idx_0 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_0 == {}'.format(focus_0))
 
-        predicts_2JHH, inv_dist_2JHH = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '2JHH', target_col)
-        features[i, 2:2+len(predicts_2JHH)] = predicts_2JHH 
-        features[i, 5:5+len(predicts_2JHH)] = inv_dist_2JHH
-
-        predicts_2JHC, inv_dist_2JHC = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '2JHC', target_col)
-        features[i, 8:8+len(predicts_2JHC)] = predicts_2JHC
-        features[i, 11:11+len(predicts_2JHC)] = inv_dist_2JHC
-
-        predicts_3JHC, inv_dist_3JHC = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '3JHC', target_col)
-        if len(predicts_3JHC) > 3:            
-            features[i, 14:17] = predicts_3JHC[:3]
-            features[i, 17:20] = inv_dist_3JHC[:3]
-        else:
-            features[i, 14:14+len(predicts_3JHC)] = predicts_3JHC
-            features[i, 17:17+len(predicts_3JHC)] = inv_dist_3JHC
-
-        predicts_3JHH, inv_dist_3JHH = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '3JHH', target_col)
-        if len(predicts_3JHH) > 3:            
-            features[i, 20:23] = predicts_3JHH[:3]
-            features[i, 23:] = inv_dist_3JHH[:3]
-        else:
-            features[i, 20:20+len(predicts_3JHH)] = predicts_3JHH
-            features[i, 23:23+len(predicts_3JHH)] = inv_dist_3JHH
+        for j, b in enumerate(bonds):
+            predicts, inv_dist = pickup_bond_value_dist(df_mol_idx_0, dist_arr, b, target_col)
+            if len(predicts) > 3:            
+                features[i, 2+j*3:2+(j+1)*3] = predicts[:3]
+                features[i, 2+(j+1)*3:2+(j+2)*3] = inv_dist[:3]
+            else:
+                features[i, 2+j*3:2+j*3+len(predicts)] = predicts
+                features[i, 2+(j+1)*3:2+(j+1)*3+len(inv_dist)] = inv_dist
 
     df_out = pd.DataFrame(features)
     df_out['id'] = con_id
