@@ -172,9 +172,8 @@ def get_cos(df_structures_idx, mol, thres=1.7):
     return out
 
 def get_pickup(df_idx, df_structures_idx, molecule, num_pickup=5, atoms=['H', 'C', 'N', 'O', 'F']):
-    num_feature = 5 #direction, angle, orientation, bond_cos1, bond_cos2, cos_itself*2
-
-    pickup_dist_matrix = np.zeros([0, len(atoms)*num_pickup*num_feature + 2])
+    num_feature = 5 #direction, angle, orientation, bond_cos1, bond_cos2
+    pickup_dist_matrix = np.zeros([0, len(atoms)*num_pickup*num_feature])
     assigned_idxs = assign_atoms_index(df_idx, molecule) # [0, 1, 2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6]
     dist_mat = get_dist_matrix(df_structures_idx, molecule)
     bond_cos = get_cos(df_structures_idx, molecule)
@@ -235,8 +234,8 @@ def get_pickup(df_idx, df_structures_idx, molecule, num_pickup=5, atoms=['H', 'C
                 target_matrix[a, num_pickup*4+num_atom:-2] = 1
 
         dist_ang_ori_bond =  target_matrix.reshape(-1)
-        dist_ang_ori_bond_bond = np.hstack([dist_ang_ori_bond,  bond_cos[idx,0],  bond_cos[idx,1]])
-        pickup_dist_matrix = np.vstack([pickup_dist_matrix, dist_ang_ori_bond_bond])
+        # dist_ang_ori_bond_bond = np.hstack([dist_ang_ori_bond,  bond_cos[idx,0],  bond_cos[idx,1]])
+        pickup_dist_matrix = np.vstack([pickup_dist_matrix, dist_ang_ori_bond])
 
     return pickup_dist_matrix #(num_assigned_atoms, num_atoms*num_pickup*5 + 2)
 
@@ -372,3 +371,201 @@ def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
 
 def type_score(y_val, y_pred):
     return np.log(sum(np.abs(y_val- y_pred)) / len(y_val))
+
+def pickup_bond_value_dist(df_mol_idx_0, dist_arr, bond, target_col):
+    df_mol_idx_b = df_mol_idx_0.query('type == "{}"'.format(bond))
+    atoms_b = df_mol_idx_b['atom_index_1'].values
+    dist_b = dist_arr[atoms_b]
+    predicts_b = df_mol_idx_b[target_col]        
+    sorting_b = np.argsort(dist_b)
+    return predicts_b.values[sorting_b], 1/dist_arr[atoms_b][sorting_b]
+
+def gen_second_data(df_idx, df_structures_idx, m, target_bond='1JHC', target_col='scalar_coupling_constant'):
+    try:
+        type(df_idx.loc[m]) == pd.Series
+    except:
+        print("series exception:", m)
+        return
+    dist_mat = get_dist_matrix(df_structures_idx, m)    
+
+    df_mol = df_idx.loc[m]
+    con_id = df_mol.query('type == "{}"'.format(target_bond))['id'].values
+    df_mol_idx = df_mol.set_index('id')
+
+    features = np.zeros([len(con_id), 26]) # pred: 1x2, 2JHH: 3x2, 2JHC: 3x2, 3JHH: 3x2, 3JHC: 3x2  
+
+    for i, idx in enumerate(con_id):
+        focus_0 = df_mol_idx.loc[idx]['atom_index_0']
+        focus_1 = df_mol_idx.loc[idx]['atom_index_1']
+
+        dist_arr = dist_mat[focus_0]
+        features[i, 0] = df_mol_idx.loc[idx][target_col]
+        features[i, 1] = 1/dist_arr[focus_1]
+
+        df_mol_idx_0 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_0 == {}'.format(focus_0))
+
+        predicts_2JHH, inv_dist_2JHH = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '2JHH', target_col)
+        features[i, 2:2+len(predicts_2JHH)] = predicts_2JHH 
+        features[i, 5:5+len(predicts_2JHH)] = inv_dist_2JHH
+
+        predicts_2JHC, inv_dist_2JHC = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '2JHC', target_col)
+        features[i, 8:8+len(predicts_2JHC)] = predicts_2JHC
+        features[i, 11:11+len(predicts_2JHC)] = inv_dist_2JHC
+
+        predicts_3JHC, inv_dist_3JHC = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '3JHC', target_col)
+        if len(predicts_3JHC) > 3:            
+            features[i, 14:17] = predicts_3JHC[:3]
+            features[i, 17:20] = inv_dist_3JHC[:3]
+        else:
+            features[i, 14:14+len(predicts_3JHC)] = predicts_3JHC
+            features[i, 17:17+len(predicts_3JHC)] = inv_dist_3JHC
+
+        predicts_3JHH, inv_dist_3JHH = pickup_bond_value_dist(df_mol_idx_0, dist_arr, '3JHH', target_col)
+        if len(predicts_3JHH) > 3:            
+            features[i, 20:23] = predicts_3JHH[:3]
+            features[i, 23:] = inv_dist_3JHH[:3]
+        else:
+            features[i, 20:20+len(predicts_3JHH)] = predicts_3JHH
+            features[i, 23:23+len(predicts_3JHH)] = inv_dist_3JHH
+
+    df_out = pd.DataFrame(features)
+    df_out['id'] = con_id
+    return df_out
+
+
+
+def gen_second_data_obs(df_idx, df_structure_idx, m, bond=['1JHC', '2JHC', '3JHC']):
+    if type(df_idx.loc[m]) == pd.Series:
+        return
+    dist_mat = get_dist_matrix(df_structure_idx, m)    
+
+    df_temp = df_idx.loc[m].query('type in {}'.format(bond))
+    con_id = df_temp['id'].values
+    df_temp_idx = df_temp.set_index('id')
+
+    features = np.zeros([len(con_id), 32]) # pred: 1x2, 1JHC: 3x2, 2JHC: 3x2, 3JHC: 9x2  
+
+    for i, idx in enumerate(con_id):
+        pred_cols = 'predict'
+        features[i, 0] = df_temp_idx.loc[idx][pred_cols]
+
+        focus_atom = df_temp_idx.loc[idx]['atom_index_1']
+        dist_arr = dist_mat[focus_atom]
+        focus_0 = df_temp_idx.loc[idx]['atom_index_0']
+
+        features[i, 1] = 1/dist_arr[focus_0]
+
+        df_temp_idx_1JHC = df_temp_idx.loc[con_id != idx].query('type == "{}" and atom_index_1 == {}'.format(bond[0], focus_atom)) 
+        atoms_1JHC = df_temp_idx_1JHC['atom_index_0']
+        predicts_1JHC = df_temp_idx_1JHC[pred_cols]
+        dist_1JHC = dist_arr[atoms_1JHC]
+        sorting_1JHC = np.argsort(dist_1JHC)
+        features[i, 2:2+len(predicts_1JHC)] = predicts_1JHC.values[sorting_1JHC]    
+        features[i, 5:5+len(predicts_1JHC)] = 1/dist_arr[atoms_1JHC][sorting_1JHC]
+
+        df_temp_idx_2JHC = df_temp_idx.loc[con_id != idx].query('type == "{}" and atom_index_1 == {}'.format(bond[1], focus_atom)) 
+        atoms_2JHC = df_temp_idx_2JHC['atom_index_0']
+        predicts_2JHC = df_temp_idx_2JHC[pred_cols]
+        dist_2JHC = dist_arr[atoms_2JHC]
+        sorting_2JHC = np.argsort(dist_2JHC)
+        features[i, 8:8+len(predicts_2JHC)] = predicts_2JHC.values[sorting_2JHC]   
+        features[i, 11:11+len(predicts_2JHC)] = 1/dist_arr[atoms_2JHC][sorting_2JHC]
+
+        df_temp_idx_3JHC = df_temp_idx.loc[con_id != idx].query('type == "{}" and atom_index_1 == {}'.format(bond[2], focus_atom)) 
+        atoms_3JHC = df_temp_idx_3JHC['atom_index_0']
+        predicts_3JHC = df_temp_idx_3JHC[pred_cols]
+        dist_3JHC = dist_arr[atoms_3JHC]
+        sorting_3JHC = np.argsort(dist_3JHC)
+        if len(sorting_3JHC) > 9:            
+            features[i, 14:23] = predicts_3JHC.values[sorting_3JHC][:9]
+            features[i, 23:] = 1/dist_arr[atoms_3JHC][sorting_3JHC][:9]
+        else:
+            features[i, 14:14+len(predicts_3JHC)] = predicts_3JHC.values[sorting_3JHC][:9]
+            features[i, 23:23+len(predicts_3JHC)] = 1/dist_arr[atoms_3JHC][sorting_3JHC][:9]
+    df_out = pd.DataFrame(features)
+    df_out['id'] = con_id
+    return df_out
+
+def c_neighbor(df_structures_idx, mol, thres=1.65):
+    dist_mat = get_dist_matrix(df_structures_idx, mol)
+    atom_arr = df_structures_idx.loc[mol]["atom"].values
+    df_temp = df_structures_idx.loc[mol]
+    num_atoms = df_temp.shape[0]
+
+    c_idx = df_temp[df_temp['atom'] == 'C']['atom_index'].values
+
+    neighbor_idx = {}
+    neighbor_atoms = {}
+#     neighbor_dist = {}
+
+    for i in c_idx:
+        dist_argsort = np.argsort(dist_mat[i])
+        near_1_idx = dist_argsort[1]
+        near_2_idx = dist_argsort[2]
+        try:
+            near_3_idx = dist_argsort[3]
+            if  dist_mat[i][near_3_idx] < thres:
+                try:
+                    near_4_idx = dist_argsort[4]
+                    if  dist_mat[i][near_4_idx] < thres:
+                        neighbor_idx[i] = np.array([near_1_idx, near_2_idx, near_3_idx, near_4_idx])
+                        neighbor_atoms[i] = atom_arr[neighbor_idx[i]]
+#                         neighbor_dist[i] = dist_mat[i][[neighbor_idx[i]]]
+                    else:
+                        neighbor_idx[i] = np.array([near_1_idx, near_2_idx, near_3_idx, -1])
+                        atoms = atom_arr[np.array([neighbor_idx[i][:3]])][0]
+                        neighbor_atoms[i] =  np.hstack([atoms, "X"])
+#                         dists = dist_mat[i][neighbor_idx[i][:3]][0]
+#                         neighbor_dist[i] = np.hstack([dists, 0.0])
+                except:
+                    neighbor_idx[i] = np.array([near_1_idx, near_2_idx, near_3_idx, -1])
+                    atoms = atom_arr[neighbor_idx[i][:3]][0]
+                    neighbor_atoms[i] =  np.hstack([atoms, "X"])
+#                     dists = dist_mat[i][neighbor_idx[i][:3]][0]
+#                     neighbor_dist[i] = np.hstack([dists, 0.0])
+            else:
+                neighbor_idx[i] = np.array([near_1_idx, near_2_idx, -1, -1])
+                atoms = atom_arr[neighbor_idx[i][:2]][0]
+                neighbor_atoms[i] =  np.hstack([atoms, "X", "X"])
+#                 dists = dist_mat[i][neighbor_idx[i][:2]][0]
+#                 neighbor_dist[i] = np.hstack([dists, 0.0, 0.0])
+        except:
+            neighbor_idx[i] = np.array([near_1_idx, near_2_idx, -1, -1])
+            atoms = atom_arr[neighbor_idx[i][:2]][0]
+            neighbor_atoms[i] =  np.hstack([atoms, "X", "X"])
+#             dists = dist_mat[i][neighbor_idx[i][:2]][0]
+#             neighbor_dist[i] = np.hstack([dists, 0.0, 0.0])
+
+    return neighbor_idx, neighbor_atoms#, neighbor_dist
+
+def pickup_neighbors(i, neighbors):
+    return neighbors[i]
+def gen_df_1JHC(df_idx, df_structures_idx, m):
+#     neighbors_idx, neighbors_atom, neighbors_dist = c_neighbor(df_structures_idx, m)
+    neighbors_idx, neighbors_atom = c_neighbor(df_structures_idx, m)
+    
+    df_idx_temp = df_idx.loc[m]
+    if type(df_idx_temp) == pd.Series:
+        return
+    
+    df_1JHC_temp = df_idx_temp.query('type == "1JHC"')
+
+    atom_arrays = df_1JHC_temp['atom_index_1'].apply(pickup_neighbors, neighbors=neighbors_atom).values
+    idx_arrays = df_1JHC_temp['atom_index_1'].apply(pickup_neighbors, neighbors=neighbors_idx).values
+    # dist_arrays = df_1JHC_temp['atom_index_1'].apply(pickup_neighbors, neighbors=neighbors_dist)
+
+    num = len(idx_arrays)
+    idx_arr = np.zeros([0,4])
+    atom_arr = np.zeros([0,4])
+    # dist_arr = np.zeros([0,4])
+    for i in range(num):
+        idx_arr = np.vstack([idx_arr, idx_arrays[i]])
+        atom_arr = np.vstack([atom_arr, atom_arrays[i]])
+    #     dist_arr = np.vstack([dist_arr, dist_arrays[i]])
+
+    for j in range(4):
+        df_1JHC_temp.loc[:]['neig_idx_{}'.format(j)] = idx_arr[:,j]
+        df_1JHC_temp.loc[:]['neig_atom_{}'.format(j)] = atom_arr[:,j]
+    #     df_1JHC_temp['neig_dist_{}'.format(j)] = dist_arr[:,j]
+
+    return df_1JHC_temp
