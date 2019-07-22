@@ -394,81 +394,39 @@ def gen_second_data(df_idx, df_structures_idx, m, target_bond='1JHC', target_col
 
     bonds = ['1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
 
-    features = np.zeros([len(con_id), len(bonds)+2]) # pred: 1x2, 2JHH: 3x2, 2JHC: 3x2, 3JHH: 3x2, 3JHC: 3x2  
+    predict_01 = np.zeros([len(con_id), 2])
+    features_0 = np.zeros([len(con_id), len(bonds)*3*2])
+    features_1 = np.zeros([len(con_id), len(bonds)*3*2])
 
     for i, idx in enumerate(con_id):
         focus_0 = df_mol_idx.loc[idx]['atom_index_0']
         focus_1 = df_mol_idx.loc[idx]['atom_index_1']
 
         dist_arr = dist_mat[focus_0]
-        features[i, 0] = df_mol_idx.loc[idx][target_col]
-        features[i, 1] = 1/dist_arr[focus_1]
+        predict_01[i, 0] = df_mol_idx.loc[idx][target_col]
+        predict_01[i, 1] = 1/dist_arr[focus_1]
 
         df_mol_idx_0 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_0 == {}'.format(focus_0))
-
         for j, b in enumerate(bonds):
             predicts, inv_dist = pickup_bond_value_dist(df_mol_idx_0, dist_arr, b, target_col)
             if len(predicts) > 3:            
-                features[i, 2+j*3:2+(j+1)*3] = predicts[:3]
-                features[i, 2+(j+1)*3:2+(j+2)*3] = inv_dist[:3]
+                features_0[i, j*3:(j+1)*3] = predicts[:3]
+                features_0[i, (j+1)*3:(j+2)*3] = inv_dist[:3]
             else:
-                features[i, 2+j*3:2+j*3+len(predicts)] = predicts
-                features[i, 2+(j+1)*3:2+(j+1)*3+len(inv_dist)] = inv_dist
-
-    df_out = pd.DataFrame(features)
-    df_out['id'] = con_id
-    return df_out
-
-
-
-def gen_second_data_obs(df_idx, df_structure_idx, m, bond=['1JHC', '2JHC', '3JHC']):
-    if type(df_idx.loc[m]) == pd.Series:
-        return
-    dist_mat = get_dist_matrix(df_structure_idx, m)    
-
-    df_temp = df_idx.loc[m].query('type in {}'.format(bond))
-    con_id = df_temp['id'].values
-    df_temp_idx = df_temp.set_index('id')
-
-    features = np.zeros([len(con_id), 32]) # pred: 1x2, 1JHC: 3x2, 2JHC: 3x2, 3JHC: 9x2  
-
-    for i, idx in enumerate(con_id):
-        pred_cols = 'predict'
-        features[i, 0] = df_temp_idx.loc[idx][pred_cols]
-
-        focus_atom = df_temp_idx.loc[idx]['atom_index_1']
-        dist_arr = dist_mat[focus_atom]
-        focus_0 = df_temp_idx.loc[idx]['atom_index_0']
-
-        features[i, 1] = 1/dist_arr[focus_0]
-
-        df_temp_idx_1JHC = df_temp_idx.loc[con_id != idx].query('type == "{}" and atom_index_1 == {}'.format(bond[0], focus_atom)) 
-        atoms_1JHC = df_temp_idx_1JHC['atom_index_0']
-        predicts_1JHC = df_temp_idx_1JHC[pred_cols]
-        dist_1JHC = dist_arr[atoms_1JHC]
-        sorting_1JHC = np.argsort(dist_1JHC)
-        features[i, 2:2+len(predicts_1JHC)] = predicts_1JHC.values[sorting_1JHC]    
-        features[i, 5:5+len(predicts_1JHC)] = 1/dist_arr[atoms_1JHC][sorting_1JHC]
-
-        df_temp_idx_2JHC = df_temp_idx.loc[con_id != idx].query('type == "{}" and atom_index_1 == {}'.format(bond[1], focus_atom)) 
-        atoms_2JHC = df_temp_idx_2JHC['atom_index_0']
-        predicts_2JHC = df_temp_idx_2JHC[pred_cols]
-        dist_2JHC = dist_arr[atoms_2JHC]
-        sorting_2JHC = np.argsort(dist_2JHC)
-        features[i, 8:8+len(predicts_2JHC)] = predicts_2JHC.values[sorting_2JHC]   
-        features[i, 11:11+len(predicts_2JHC)] = 1/dist_arr[atoms_2JHC][sorting_2JHC]
-
-        df_temp_idx_3JHC = df_temp_idx.loc[con_id != idx].query('type == "{}" and atom_index_1 == {}'.format(bond[2], focus_atom)) 
-        atoms_3JHC = df_temp_idx_3JHC['atom_index_0']
-        predicts_3JHC = df_temp_idx_3JHC[pred_cols]
-        dist_3JHC = dist_arr[atoms_3JHC]
-        sorting_3JHC = np.argsort(dist_3JHC)
-        if len(sorting_3JHC) > 9:            
-            features[i, 14:23] = predicts_3JHC.values[sorting_3JHC][:9]
-            features[i, 23:] = 1/dist_arr[atoms_3JHC][sorting_3JHC][:9]
-        else:
-            features[i, 14:14+len(predicts_3JHC)] = predicts_3JHC.values[sorting_3JHC][:9]
-            features[i, 23:23+len(predicts_3JHC)] = 1/dist_arr[atoms_3JHC][sorting_3JHC][:9]
+                features_0[i, j*3:j*3+len(predicts)] = predicts
+                features_0[i, (j+1)*3:(j+1)*3+len(inv_dist)] = inv_dist
+        
+        df_mol_idx_1 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_1 == {}'.format(focus_1))
+        for j, b in enumerate(bonds):
+            predicts, inv_dist = pickup_bond_value_dist(df_mol_idx_1, dist_arr, b, target_col)
+            if len(predicts) > 3:            
+                features_1[i, j*3:(j+1)*3] = predicts[:3]
+                features_1[i, (j+1)*3:(j+2)*3] = inv_dist[:3]
+            else:
+                features_1[i, j*3:j*3+len(predicts)] = predicts
+                features_1[i, (j+1)*3:(j+1)*3+len(inv_dist)] = inv_dist
+                
+    features = np.hstack([predict_01, features_0, features_1])
     df_out = pd.DataFrame(features)
     df_out['id'] = con_id
     return df_out
