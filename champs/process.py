@@ -381,10 +381,7 @@ def pickup_bond_value_dist(df_mol_idx_0, dist_arr, bond, target_col):
     return predicts_b.values[sorting_b], 1/dist_arr[atoms_b][sorting_b]
 
 def gen_second_data(df_idx, df_structures_idx, m, target_bond='1JHC', target_col='scalar_coupling_constant'):
-    try:
-        type(df_idx.loc[m]) == pd.Series
-    except:
-        print("series exception:", m)
+    if type(df_idx.loc[m]) == pd.Series:
         return
     dist_mat = get_dist_matrix(df_structures_idx, m)    
 
