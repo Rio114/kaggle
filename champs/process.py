@@ -372,61 +372,118 @@ def gen_pairs_list(df_idx, df_structures_idx, molecule_name, type_3J):
 def type_score(y_val, y_pred):
     return np.log(sum(np.abs(y_val- y_pred)) / len(y_val))
 
-def pickup_bond_value_dist(df_mol_idx_0, dist_arr, bond, target_col):
+def pickup_bond_dist(df_mol_idx_0, dist_arr, bond):
     df_mol_idx_b = df_mol_idx_0.query('type == "{}"'.format(bond))
     atoms_b = df_mol_idx_b['atom_index_1'].values
-    dist_b = dist_arr[atoms_b]
-    predicts_b = df_mol_idx_b[target_col]        
+    dist_b = dist_arr[atoms_b]       
     sorting_b = np.argsort(dist_b)
-    return predicts_b.values[sorting_b], 1/dist_arr[atoms_b][sorting_b]
+    idx_b = df_mol_idx_b.index.values
+    return idx_b[sorting_b], 1/dist_arr[atoms_b][sorting_b]
 
-def gen_second_data(df_idx, df_structures_idx, m, target_bond='1JHC', target_col='scalar_coupling_constant'):
+def gen_map_dist(df_idx, df_structures_idx, m):
+    
+    bonds = ['1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
+    
     if type(df_idx.loc[m]) == pd.Series:
-        return
+
+        idx_0 = np.ones([1+len(bonds)*3*2]) * (-1)
+        dist_0 = np.zeros([1+len(bonds)*3*2])
+
+        df_idx_out = pd.DataFrame(idx_0, dtype='int32').T
+        df_idx_out['id'] = df_idx.loc[m]['id']
+        df_idx_out['molecule_name'] = m
+
+        df_dist_out = pd.DataFrame(dist_0, dtype='float32').T
+        df_dist_out['id'] = df_idx.loc[m]['id']
+        df_dist_out['molecule_name'] = m
+
+        return df_idx_out, df_dist_out
+    
     dist_mat = get_dist_matrix(df_structures_idx, m)    
 
-    df_mol = df_idx.loc[m]
-    con_id = df_mol.query('type == "{}"'.format(target_bond))['id'].values
-    df_mol_idx = df_mol.set_index('id')
+    df_idx_out_all = pd.DataFrame()
+    df_dist_out_all = pd.DataFrame()
+    
+    for target_bond in bonds:
 
-    bonds = ['1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
+        df_mol = df_idx.loc[m]
+        con_id = df_mol.query('type == "{}"'.format(target_bond))['id'].values
+        if len(con_id) == 0:
+            continue
+            
+        df_mol_idx = df_mol.set_index('id')
 
-    predict_01 = np.zeros([len(con_id), 2])
-    features_0 = np.zeros([len(con_id), len(bonds)*3*2])
-    features_1 = np.zeros([len(con_id), len(bonds)*3*2])
+        idx_01 = np.ones(len(con_id)) * (-1)
+        idx_0 = np.ones([len(con_id), len(bonds)*3]) * (-1)
+        idx_1 = np.ones([len(con_id), len(bonds)*3]) * (-1)
 
-    for i, idx in enumerate(con_id):
-        focus_0 = df_mol_idx.loc[idx]['atom_index_0']
-        focus_1 = df_mol_idx.loc[idx]['atom_index_1']
+        dist_01 = np.zeros(len(con_id))
+        dist_0 = np.zeros([len(con_id), len(bonds)*3])
+        dist_1 = np.zeros([len(con_id), len(bonds)*3])
 
-        dist_arr = dist_mat[focus_0]
-        predict_01[i, 0] = df_mol_idx.loc[idx][target_col]
-        predict_01[i, 1] = 1/dist_arr[focus_1]
+        for i, idx in enumerate(con_id):
+            focus_0 = df_mol_idx.loc[idx]['atom_index_0']
+            focus_1 = df_mol_idx.loc[idx]['atom_index_1']
 
-        df_mol_idx_0 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_0 == {}'.format(focus_0))
-        for j, b in enumerate(bonds):
-            predicts, inv_dist = pickup_bond_value_dist(df_mol_idx_0, dist_arr, b, target_col)
-            if len(predicts) > 3:            
-                features_0[i, j*3:(j+1)*3] = predicts[:3]
-                features_0[i, (j+1)*3:(j+2)*3] = inv_dist[:3]
-            else:
-                features_0[i, j*3:j*3+len(predicts)] = predicts
-                features_0[i, (j+1)*3:(j+1)*3+len(inv_dist)] = inv_dist
+            dist_arr = dist_mat[focus_0]
+            idx_01[i] = idx
+            dist_01[i] = 1/dist_arr[focus_1]
+
+            df_mol_idx_0 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_0 == {}'.format(focus_0))
+            for j, b in enumerate(bonds):
+                con_b_idx, inv_dist = pickup_bond_dist(df_mol_idx_0, dist_arr, b)
+                num_atoms = len(con_b_idx)
+                if num_atoms == 0:
+                    continue
+                if num_atoms > 3:
+                    idx_0[i, j*3:(j+1)*3] = con_b_idx[:3]
+                    dist_0[i, j*3:(j+1)*3] = inv_dist[:3]
+                else:
+                    idx_0[i, j*3:j*3+num_atoms] = con_b_idx
+                    dist_0[i, j*3:j*3+num_atoms] = inv_dist
+
+            df_mol_idx_1 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_1 == {}'.format(focus_1))
+            for j, b in enumerate(bonds):
+                con_b_idx, inv_dist = pickup_bond_dist(df_mol_idx_1, dist_arr, b)
+                num_atoms = len(con_b_idx)
+                if num_atoms == 0:
+                    continue
+                if num_atoms > 3:     
+                    idx_1[i, j*3:(j+1)*3] = con_b_idx[:3]
+                    dist_1[i, j*3:(j+1)*3] = inv_dist[:3]
+                else:
+                    idx_1[i, j*3:j*3+num_atoms] = con_b_idx
+                    dist_1[i, j*3:j*3+num_atoms] = inv_dist
+
+        idx_all = np.hstack([idx_01.reshape(-1,1), idx_0, idx_1])
+        dist_all = np.hstack([dist_01.reshape(-1,1), dist_0, dist_1])
+
+        df_idx_out = pd.DataFrame(idx_all, dtype='int32')
+        df_idx_out['id'] = con_id
+        df_idx_out['molecule_name'] = m
+
+        df_dist_out = pd.DataFrame(dist_all, dtype='float32')
+        df_dist_out['id'] = con_id
+        df_dist_out['molecule_name'] = m
         
-        df_mol_idx_1 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_1 == {}'.format(focus_1))
-        for j, b in enumerate(bonds):
-            predicts, inv_dist = pickup_bond_value_dist(df_mol_idx_1, dist_arr, b, target_col)
-            if len(predicts) > 3:            
-                features_1[i, j*3:(j+1)*3] = predicts[:3]
-                features_1[i, (j+1)*3:(j+2)*3] = inv_dist[:3]
-            else:
-                features_1[i, j*3:j*3+len(predicts)] = predicts
-                features_1[i, (j+1)*3:(j+1)*3+len(inv_dist)] = inv_dist
+        df_idx_out_all = pd.concat([df_idx_out_all, df_idx_out], axis=0)
+        df_dist_out_all = pd.concat([df_dist_out_all, df_dist_out], axis=0)
                 
-    features = np.hstack([predict_01, features_0, features_1])
-    df_out = pd.DataFrame(features)
-    df_out['id'] = con_id
-    return df_out
+    return df_idx_out_all, df_dist_out_all
+
+def gen_second_data(df_idx, df_sc_map_idx, m, target_col='scalar_coupling_constant'):
+    df_sc_map_temp = df_sc_map_idx.loc[m]
+
+    id_sc_map = dict(df_idx.loc[m][['id', target_col]].values)
+    id_sc_map[-1] = 0
+    id_sc_map
+
+    cols = list(df_sc_map_temp.columns)
+    cols.remove('id')
+    ids = pd.DataFrame(df_sc_map_temp['id']).reset_index()
+    del ids['molecule_name']
+    df_bond_sc = pd.concat([ids, df_sc_map_temp[cols].replace(id_sc_map).reset_index()], axis=1)
+    return df_bond_sc
 
 def c_neighbor(df_structures_idx, mol, thres=1.65):
     dist_mat = get_dist_matrix(df_structures_idx, mol)
