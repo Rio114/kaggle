@@ -404,14 +404,13 @@ def gen_map_dist(df_idx, df_structures_idx, m):
     df_idx_out_all = pd.DataFrame()
     df_dist_out_all = pd.DataFrame()
     
-    for target_bond in bonds:
+    df_mol = df_idx.loc[m]
+    df_mol_idx = df_mol.set_index('id')
 
-        df_mol = df_idx.loc[m]
+    for target_bond in bonds:
         con_id = df_mol.query('type == "{}"'.format(target_bond))['id'].values
         if len(con_id) == 0:
             continue
-            
-        df_mol_idx = df_mol.set_index('id')
 
         idx_01 = np.ones(len(con_id)) * (-1)
         idx_0 = np.ones([len(con_id), len(bonds)*3]) * (-1)
@@ -568,3 +567,13 @@ def gen_df_1JHC(df_idx, df_structures_idx, m):
     #     df_1JHC_temp['neig_dist_{}'.format(j)] = dist_arr[:,j]
 
     return df_1JHC_temp
+
+
+def map_pred(df_pred_idx, df_map_idx, m, target_cols='predict'):
+    ids = df_pred_idx.loc[m]['id'].values
+    preds = df_pred_idx.loc[m]['predict'].values
+    pred_dict = {ids[i]:preds[i] for i in range(ids.shape[0])}
+    pred_dict[-1] = 0
+    df_sc_train = df_map_idx.loc[m][df_map_idx.columns[:-1]].replace(pred_dict)
+    df_sc_train['id'] = df_map_idx.loc[m]['id']
+    return df_sc_train.reset_index(drop=True)
