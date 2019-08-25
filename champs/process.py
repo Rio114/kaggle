@@ -380,14 +380,14 @@ def pickup_bond_dist(df_mol_idx_0, dist_arr, bond):
     idx_b = df_mol_idx_b.index.values
     return idx_b[sorting_b], 1/dist_arr[atoms_b][sorting_b]
 
-def gen_map_dist(df_idx, df_structures_idx, m):
+def gen_map_dist(df_idx, df_structures_idx, num, m):
     
     bonds = ['1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
     
     if type(df_idx.loc[m]) == pd.Series:
 
-        idx_0 = np.ones([1+len(bonds)*3*2]) * (-1)
-        dist_0 = np.zeros([1+len(bonds)*3*2])
+        idx_0 = np.ones([1+len(bonds)*num*2]) * (-1)
+        dist_0 = np.zeros([1+len(bonds)*num*2])
 
         df_idx_out = pd.DataFrame(idx_0, dtype='int32').T
         df_idx_out['id'] = df_idx.loc[m]['id']
@@ -413,12 +413,12 @@ def gen_map_dist(df_idx, df_structures_idx, m):
             continue
 
         idx_01 = np.ones(len(con_id)) * (-1)
-        idx_0 = np.ones([len(con_id), len(bonds)*3]) * (-1)
-        idx_1 = np.ones([len(con_id), len(bonds)*3]) * (-1)
+        idx_0 = np.ones([len(con_id), len(bonds)*num]) * (-1)
+        idx_1 = np.ones([len(con_id), len(bonds)*num]) * (-1)
 
         dist_01 = np.zeros(len(con_id))
-        dist_0 = np.zeros([len(con_id), len(bonds)*3])
-        dist_1 = np.zeros([len(con_id), len(bonds)*3])
+        dist_0 = np.zeros([len(con_id), len(bonds)*num])
+        dist_1 = np.zeros([len(con_id), len(bonds)*num])
 
         for i, idx in enumerate(con_id):
             focus_0 = df_mol_idx.loc[idx]['atom_index_0']
@@ -434,12 +434,12 @@ def gen_map_dist(df_idx, df_structures_idx, m):
                 num_atoms = len(con_b_idx)
                 if num_atoms == 0:
                     continue
-                if num_atoms > 3:
-                    idx_0[i, j*3:(j+1)*3] = con_b_idx[:3]
-                    dist_0[i, j*3:(j+1)*3] = inv_dist[:3]
+                if num_atoms > num:
+                    idx_0[i, j*num:(j+1)*num] = con_b_idx[:num]
+                    dist_0[i, j*num:(j+1)*num] = inv_dist[:num]
                 else:
-                    idx_0[i, j*3:j*3+num_atoms] = con_b_idx
-                    dist_0[i, j*3:j*3+num_atoms] = inv_dist
+                    idx_0[i, j*num:j*num+num_atoms] = con_b_idx
+                    dist_0[i, j*num:j*num+num_atoms] = inv_dist
 
             df_mol_idx_1 = df_mol_idx.loc[df_mol_idx.index != idx].query('atom_index_1 == {}'.format(focus_1))
             for j, b in enumerate(bonds):
@@ -447,12 +447,12 @@ def gen_map_dist(df_idx, df_structures_idx, m):
                 num_atoms = len(con_b_idx)
                 if num_atoms == 0:
                     continue
-                if num_atoms > 3:     
-                    idx_1[i, j*3:(j+1)*3] = con_b_idx[:3]
-                    dist_1[i, j*3:(j+1)*3] = inv_dist[:3]
+                if num_atoms > num:     
+                    idx_1[i, j*num:(j+1)*num] = con_b_idx[:num]
+                    dist_1[i, j*num:(j+1)*num] = inv_dist[:num]
                 else:
-                    idx_1[i, j*3:j*3+num_atoms] = con_b_idx
-                    dist_1[i, j*3:j*3+num_atoms] = inv_dist
+                    idx_1[i, j*num:j*num+num_atoms] = con_b_idx
+                    dist_1[i, j*num:j*num+num_atoms] = inv_dist
 
         idx_all = np.hstack([idx_01.reshape(-1,1), idx_0, idx_1])
         dist_all = np.hstack([dist_01.reshape(-1,1), dist_0, dist_1])
@@ -577,3 +577,18 @@ def map_pred(df_pred_idx, df_map_idx, m, target_cols='predict'):
     df_sc_train = df_map_idx.loc[m][df_map_idx.columns[:-1]].replace(pred_dict)
     df_sc_train['id'] = df_map_idx.loc[m]['id']
     return df_sc_train.reset_index(drop=True)
+
+def map_feature(df_map_idx, features, m):
+    if m == 'dsgdb9nsd_000003':
+        merged_feature = np.zeros([1, 49, 215])
+        merged_feature[0, 1, :] = features[16]
+        return merged_feature
+    ids = df_map_idx.loc[m].sort_values('id')['id'].unique()
+    map_feature = {i:features[i] for i in ids}
+    map_feature[-1] = np.zeros(215)
+    merged_feature = np.zeros([len(ids), 49, 215])
+    for i in range(len(ids)):
+        pickup_ids = df_map_idx.loc[m].sort_values('id').iloc[i].values[:-1]
+        for j, p in enumerate(pickup_ids):
+            merged_feature[i, j, :] = map_feature[p]
+    return merged_feature
