@@ -75,30 +75,27 @@ class MultiboxLoss(object):
             loss: Loss for prediction, tensor of shape (?,).
         """
         batch_size = tf.shape(y_true)[0]
-        num_boxes = tf.to_float(tf.shape(y_true)[1])
+        num_boxes = tf.to_float(tf.shape(y_true)[1]) # num-box in each sample
         # loss for all priors
         conf_loss = self._softmax_loss(y_true[:, :, 4:-8], y_pred[:, :, 4:-8])
         loc_loss = self._l1_smooth_loss(y_true[:, :, :4], y_pred[:, :, :4])
 
         # get positives loss
-        num_pos = tf.reduce_sum(y_true[:, :, -8], axis=-1)
-        pos_loc_loss = tf.reduce_sum(loc_loss * y_true[:, :, -8],
-                                     axis=1)
-        pos_conf_loss = tf.reduce_sum(conf_loss * y_true[:, :, -8],
-                                      axis=1)
+        num_pos = tf.reduce_sum(y_true[:, :, -8], axis=-1) # arr: positive boxes in each sample 
+        pos_loc_loss = tf.reduce_sum(loc_loss * y_true[:, :, -8], axis=1) # in each sample
+        pos_conf_loss = tf.reduce_sum(conf_loss * y_true[:, :, -8], axis=1) # in each sample
 
         # get negatives loss, we penalize only confidence here
-        num_neg = tf.minimum(self.neg_pos_ratio * num_pos, num_boxes - num_pos)
-        pos_num_neg_mask = tf.greater(num_neg, 0)
-        has_min = tf.to_float(tf.reduce_any(pos_num_neg_mask))
-        num_neg = tf.concat(axis=0, values=[num_neg,
-                                [(1 - has_min) * self.negatives_for_hard]])
+        num_neg = tf.minimum(self.neg_pos_ratio * num_pos, num_boxes - num_pos) # arr num negs
+        pos_num_neg_mask = tf.greater(num_neg, 0) # arr: samples which include negs are True 
+        has_min = tf.to_float(tf.reduce_any(pos_num_neg_mask)) 
+        num_neg = tf.concat(axis=0, values=[num_neg, [(1 - has_min) * self.negatives_for_hard]]) # num_sample x 2
         num_neg_batch = tf.reduce_min(tf.boolean_mask(num_neg, tf.greater(num_neg, 0)))
         num_neg_batch = tf.to_int32(num_neg_batch)
         confs_start = 4 + self.background_label_id + 1
         confs_end = confs_start + self.num_classes - 1
-        max_confs = tf.reduce_max(y_pred[:, :, confs_start:confs_end], axis=2)
-        _, indices = tf.nn.top_k(max_confs * (1 - y_true[:, :, -8]),k=num_neg_batch)
+        max_confs = tf.reduce_max(y_pred[:, :, confs_start:confs_end], axis=2) # find max label in each box
+        _, indices = tf.nn.top_k(max_confs * (1 - y_true[:, :, -8]), k=num_neg_batch) # pickup only negs
         batch_idx = tf.expand_dims(tf.range(0, batch_size), 1)
         batch_idx = tf.tile(batch_idx, (1, num_neg_batch))
         full_indices = (tf.reshape(batch_idx, [-1]) * tf.to_int32(num_boxes) +

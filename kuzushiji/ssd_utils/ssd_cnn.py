@@ -2,18 +2,27 @@ from keras.models import Model
 from keras.layers import Conv2D, MaxPooling2D, Input, Dense
 from keras.layers import Flatten, Reshape, Activation, Concatenate, Dropout
 
-from ssd_layer import DefaultBox
+from ssd_utils.ssd_box import DefaultBox
 
-class SSD_VGG16():
-    def __init__(self, num_classes, img_size=(224, 224, 3),variances=[0.1, 0.1, 0.2, 0.2], path='vgg16_original.hdf5'):
-        self.img_size = img_size
+class SSD_CNN():
+    def __init__(self, num_classes, img_size, 
+                variances=[0.1, 0.1, 0.2, 0.2]):
         self.num_classes = num_classes
+        self.img_size = (300, 300, 1) #img_size
+        self.variances = variances # variances for box
         self.dim_box = 4 #(cx, cy, w, h)
-        self.variances = variances
-        model = self.vgg16()
-        model.load_weights(path)
 
-    def vgg16(self):
+    def load(self, path='model.h5'):
+        '''
+        Arg:
+            cnn.h5 file path
+        return:
+            ssd model
+        '''
+        self.model = keras.models.load_model(path, compile=False)
+
+
+    def cnn(self):
         """
         build vgg16 network
         """
