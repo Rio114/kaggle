@@ -36,27 +36,24 @@ class SSD_CNN():
         inputs = Input(shape=img_size, name='cnn_input')
 
         ## Block 1
-        conv1_1 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv1_1')(inputs)
-        conv1_2 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv1_2')(conv1_1)
+        conv1_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv1_1')(inputs)
+        conv1_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv1_2')(conv1_1)
         pool1 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool1')(conv1_2)
-        norm1 = BatchNormalization()(pool1)
         
         ## Block 2
-        conv2_1 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv2_1')(norm1)
-        conv2_2 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv2_2')(conv2_1)
+        conv2_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv2_1')(pool1)
+        conv2_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv2_2')(conv2_1)
         pool2 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool2')(conv2_2)
-        norm2 = BatchNormalization()(pool2)        
 
         ## Block 3
-        conv3_1 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv3_1')(pool2)
-        conv3_2 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv3_2')(conv3_1)
+        conv3_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv3_1')(pool2)
+        conv3_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv3_2')(conv3_1)
         pool3 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool3')(conv3_2)
-        norm3 = BatchNormalization()(pool3)
         
         ## Block cnn_out
-        flat = Flatten(name='flat')(norm3)
-        dense1 = Dense(self.num_classes,activation='relu', use_bias=False,name='dense1')(flat)
-        outputs = Dense(self.num_classes, activation='softmax',use_bias=False, name='dense2')(dense1)
+        flat = Flatten(name='flat')(pool3)
+        dense1 = Dense(self.num_classes,activation='relu', name='dense1')(flat)
+        outputs = Dense(self.num_classes, activation='softmax',name='dense2')(dense1)
 
         model = Model(inputs, outputs)
         self.cnn_layers = model.layers
@@ -68,26 +65,23 @@ class SSD_CNN():
         inputs = Input(shape=img_size, name='ssd_input')
 
         ## Block 1
-        conv1_1 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv1_1')(inputs)
-        conv1_2 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv1_2')(conv1_1)
+        conv1_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv1_1')(inputs)
+        conv1_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv1_2')(conv1_1)
         pool1 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool1')(conv1_2)
-        norm1 = BatchNormalization()(pool1)
         
         ## Block 2
-        conv2_1 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv2_1')(norm1)
-        conv2_2 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv2_2')(conv2_1)
+        conv2_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv2_1')(pool1)
+        conv2_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv2_2')(conv2_1)
         pool2 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool2')(conv2_2)
-        norm2 = BatchNormalization()(pool2)        
 
         ## Block 3
-        conv3_1 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv3_1')(pool2)
-        conv3_2 = Conv2D(32, (3, 3),activation='relu',padding='same',use_bias=False,name='conv3_2')(conv3_1)
+        conv3_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv3_1')(pool2)
+        conv3_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv3_2')(conv3_1)
         pool3 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool3')(conv3_2)
-        norm3 = BatchNormalization()(pool3)
 
         ## Block 4
         # conv4 = Conv2D(8, (3, 3),activation='relu',padding='same',name='conv4')(pool3)
-        pool4 = MaxPooling2D((3,3),strides=(3,3),padding='same',name='pool4')(norm3)
+        pool4 = MaxPooling2D((3,3),strides=(3,3),padding='same',name='pool4')(pool3)
 
         ## Block 5
         # conv5 = Conv2D(8, (3, 3),activation='relu',padding='same',name='conv5')(pool4)
@@ -97,7 +91,7 @@ class SSD_CNN():
         # conv6 = Conv2D(8, (3, 3),activation='relu',padding='same',name='conv6')(pool5)
         pool6 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool6')(pool5)
 
-        conv_list = [1,2,5,6,9,10]
+        conv_list = [1,2,4,5,7,8]
 
         self.detector_layers = [pool6, pool5]
         pred_SSD = self.detectors()
@@ -128,13 +122,13 @@ class SSD_CNN():
 
             name_layer = layer.name.split('/')[0] + '_' # eg. 'conv5_1/Relu:0'-> 'conv5_1'
 
-            layer_mbox_loc = Conv2D(num_def * self.dim_box,(2,2),padding='same', use_bias=False,
+            layer_mbox_loc = Conv2D(num_def * self.dim_box,(2,2),padding='same', 
                                     name='{}_mbox_loc'.format(name_layer))(layer)
             layer_length = layer_mbox_loc.shape[1].value
             layer_mbox_loc_flat = Flatten(name='{}_mbox_loc_flat'.format(name_layer))(layer_mbox_loc)
             mbox_loc_list.append(layer_mbox_loc_flat)
             
-            layer_mbox_conf = Conv2D(num_def * self.num_classes,(2,2),padding='same', use_bias=False,
+            layer_mbox_conf = Conv2D(num_def * self.num_classes,(2,2),padding='same', 
                                     name='{}_mbox_conf'.format(name_layer))(layer)
             layer_mbox_conf_flat = Flatten(name='{}_mbox_conf_flat'.format(name_layer))(layer_mbox_conf)
             mbox_conf_list.append(layer_mbox_conf_flat)
