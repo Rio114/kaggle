@@ -3,9 +3,13 @@ from random import shuffle
 from keras.applications.imagenet_utils import preprocess_input
 from keras.preprocessing import image
 
+from ssd_utils.ssd_box import BBoxUtility
+from ssd_utils.get_gt import get_gt
+
 class Generator(object):
-    def __init__(self, gt, bbox_util,
+    def __init__(self, df_idx, bbox_util,
                  batch_size, path_prefix,
+                 ohe,
                  train_keys, val_keys, image_size,
                  saturation_var=0.5,
                  brightness_var=0.5,
@@ -16,8 +20,9 @@ class Generator(object):
                  do_crop=True,
                  crop_area_range=[0.75, 1.0],
                  aspect_ratio_range=[3./4., 4./3.]):
-        self.gt = gt
+        self.df_idx = df_idx
         self.bbox_util = bbox_util
+        self.ohe = ohe
         self.batch_size = batch_size
         self.path_prefix = path_prefix
         self.train_keys = train_keys
@@ -151,26 +156,30 @@ class Generator(object):
             inputs = []
             targets = []
             for key in keys:            
-                img_path = self.path_prefix + key
+                img_path = self.path_prefix + key + '.jpg'
                 img = image.load_img(img_path, target_size=img_size[:2])
                 img = image.img_to_array(img)
-                y = self.gt[key].copy()
-                if train and self.do_crop:
-                    img, y = self.random_sized_crop(img, y)
-                img = image.array_to_img(img)
+                img = self.grayscale(img)
+                y = get_gt(self.df_idx, key, self.path_prefix, self.ohe)
+                # if train and self.do_crop:
+                #     img, y = self.random_sized_crop(img, y)
+                img = image.array_to_img(img[:, :, np.newaxis])
                 img = img.resize((img_size[1],img_size[0]))
                 img = image.img_to_array(img)
-                if train:
-                    shuffle(self.color_jitter)
-                    for jitter in self.color_jitter:
-                        img = jitter(img)
-                    if self.lighting_std:
-                        img = self.lighting(img)
-                    if self.hflip_prob > 0:
-                        img, y = self.horizontal_flip(img, y)
-                    if self.vflip_prob > 0:
-                        img, y = self.vertical_flip(img, y)
-                y = self.bbox_util.assign_boxes(y)
+                # if train:
+                    # shuffle(self.color_jitter)
+                    # for jitter in self.color_jitter:
+                    #     img = jitter(img)
+                    # if self.lighting_std:
+                    #     img = self.lighting(img)
+                    # if self.hflip_prob > 0:
+                    #     img, y = self.horizontal_flip(img, y)
+                    # if self.vflip_prob > 0:
+                    #     img, y = self.vertical_flip(img, y)
+                try:
+                    y = self.bbox_util.assign_boxes(y)
+                except:
+                    continue
                 inputs.append(img/255)                
                 targets.append(y)
                 if len(targets) == self.batch_size:
