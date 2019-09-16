@@ -6,6 +6,8 @@ from keras.preprocessing import image
 from ssd_utils.ssd_box import BBoxUtility
 from ssd_utils.get_gt import get_gt
 
+import random
+
 class Generator(object):
     def __init__(self, df_idx, bbox_util,
                  batch_size, path_prefix,
@@ -160,6 +162,20 @@ class Generator(object):
                 img = image.load_img(img_path, target_size=img_size[:2])
                 img = image.img_to_array(img)
                 img = self.grayscale(img)
+
+                # img = image.load_img(img_path)
+                # img = image.img_to_array(img)
+                # img = self.grayscale(img)
+                
+                # original_x = img.shape[1]
+                # original_y = img.shape[0]
+                # cut_x = original_x // 2
+                # cut_y = original_y // 3
+                # n_x = random.randint(0, 1)
+                # n_y = random.randint(0, 2)
+
+                # img = img[cut_y*n_y:cut_y*(n_y+1), cut_x*n_x:cut_x*(n_x+1)]
+
                 y = get_gt(self.df_idx, key, self.path_prefix, self.ohe)
                 # if train and self.do_crop:
                 #     img, y = self.random_sized_crop(img, y)

@@ -77,7 +77,7 @@ class SSD_CNN():
         ## Block 3
         conv3_1 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv3_1')(pool2)
         conv3_2 = Conv2D(32, (3, 3),activation='relu',padding='same',name='conv3_2')(conv3_1)
-        pool3 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool3')(conv3_2)
+        pool3 = MaxPooling2D((2,2),strides=(3,3),padding='same',name='pool3')(conv3_2)
 
         ## Block 4
         # conv4 = Conv2D(8, (3, 3),activation='relu',padding='same',name='conv4')(pool3)
@@ -88,18 +88,21 @@ class SSD_CNN():
         pool5 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool5')(pool4)
 
         ## Block 6
-        # conv6 = Conv2D(8, (3, 3),activation='relu',padding='same',name='conv6')(pool5)
-        pool6 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool6')(pool5)
+        # # conv6 = Conv2D(8, (3, 3),activation='relu',padding='same',name='conv6')(pool5)
+        # pool6 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool6')(pool5)
+
+        # pool7 = MaxPooling2D((2,2),strides=(2,2),padding='same',name='pool7')(pool6)
+
 
         conv_list = [1,2,4,5,7,8]
 
-        self.detector_layers = [pool6, pool5]
+        self.detector_layers = [pool4, pool5]
         pred_SSD = self.detectors()
 
         model = Model(inputs, pred_SSD)
         for i in conv_list:
             model.layers[i].set_weights(self.cnn_layers[i].get_weights())
-            model.layers[i].trainable = False
+            # model.layers[i].trainable = False
 
         return  model
 
@@ -122,15 +125,21 @@ class SSD_CNN():
 
             name_layer = layer.name.split('/')[0] + '_' # eg. 'conv5_1/Relu:0'-> 'conv5_1'
 
-            layer_mbox_loc = Conv2D(num_def * self.dim_box,(2,2),padding='same', 
+            layer_mbox_loc = Conv2D(num_def * self.dim_box,(3,3),padding='same', 
                                     name='{}_mbox_loc'.format(name_layer))(layer)
+            # layer_mbox_loc = Dense(num_def * self.dim_box, name='{}_mbox_loc_dense'.format(name_layer))(layer) 
+            layer_mbox_loc_norm = BatchNormalization(name='{}_norm_loc'.format(name_layer))(layer_mbox_loc)
+
             layer_length = layer_mbox_loc.shape[1].value
-            layer_mbox_loc_flat = Flatten(name='{}_mbox_loc_flat'.format(name_layer))(layer_mbox_loc)
+            layer_mbox_loc_flat = Flatten(name='{}_mbox_loc_flat'.format(name_layer))(layer_mbox_loc_norm)
             mbox_loc_list.append(layer_mbox_loc_flat)
             
-            layer_mbox_conf = Conv2D(num_def * self.num_classes,(2,2),padding='same', 
+            layer_mbox_conf = Conv2D(num_def * self.num_classes,(3,3),padding='same', 
                                     name='{}_mbox_conf'.format(name_layer))(layer)
-            layer_mbox_conf_flat = Flatten(name='{}_mbox_conf_flat'.format(name_layer))(layer_mbox_conf)
+            # layer_mbox_conf = Dense(num_def * self.num_classes, name='{}_mbox_conf_dense'.format(name_layer))(layer) 
+            layer_mbox_conf_norm = BatchNormalization(name='{}_norm_conf'.format(name_layer))(layer_mbox_conf)
+
+            layer_mbox_conf_flat = Flatten(name='{}_mbox_conf_flat'.format(name_layer))(layer_mbox_conf_norm)
             mbox_conf_list.append(layer_mbox_conf_flat)
             
             layer_mbox_defbox = DefaultBox(self.img_size,
@@ -140,12 +149,19 @@ class SSD_CNN():
                                         variances=self.variances,
                                         name='{}_mbox_defbox'.format(name_layer))(layer)
             mbox_defbox_list.append(layer_mbox_defbox)
-            
-        mbox_loc = Concatenate(name='mbox_loc', axis=1)(mbox_loc_list)
+        
+        if len(mbox_loc_list) > 1:
+            mbox_loc = Concatenate(name='mbox_loc', axis=1)(mbox_loc_list)
+        else:
+            mbox_loc = mbox_loc_list[0]
         num_boxes = mbox_loc._keras_shape[-1] // 4
-        mbox_loc = Reshape((num_boxes, self.dim_box),name='mbox_loc_final')(mbox_loc)
+        mbox_loc = Reshape((num_boxes, self.dim_box),name='mbox_loc_reshape')(mbox_loc)
+        mbox_loc = Activation('sigmoid',name='mbox_loc_final')(mbox_loc)
 
-        mbox_conf = Concatenate(name='mbox_conf', axis=1)(mbox_conf_list)
+        if len(mbox_conf_list) > 1:
+            mbox_conf = Concatenate(name='mbox_conf', axis=1)(mbox_conf_list)
+        else:
+            mbox_conf = mbox_loc_list[0]
         mbox_conf = Reshape((num_boxes, self.num_classes),name='mbox_conf_logits')(mbox_conf)
         mbox_conf = Activation('softmax',name='mbox_conf_final')(mbox_conf)
         
