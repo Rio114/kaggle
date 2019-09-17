@@ -112,7 +112,7 @@ class BBoxUtility(object):
     # References
         https://arxiv.org/abs/1512.02325
     """
-    # TODO add setter methods for nms_thresh and top_K
+
     def __init__(self, num_classes, priors=None, overlap_threshold=0.5,
                  nms_thresh=0.45, top_k=400):
         self.num_classes = num_classes

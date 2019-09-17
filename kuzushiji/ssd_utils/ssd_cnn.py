@@ -156,7 +156,7 @@ class SSD_CNN():
             mbox_loc = mbox_loc_list[0]
         num_boxes = mbox_loc._keras_shape[-1] // 4
         mbox_loc = Reshape((num_boxes, self.dim_box),name='mbox_loc_reshape')(mbox_loc)
-        mbox_loc = Activation('sigmoid',name='mbox_loc_final')(mbox_loc)
+        # mbox_loc = Activation('sigmoid',name='mbox_loc_final')(mbox_loc)
 
         if len(mbox_conf_list) > 1:
             mbox_conf = Concatenate(name='mbox_conf', axis=1)(mbox_conf_list)
